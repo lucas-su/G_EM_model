@@ -222,7 +222,7 @@ class E():
         self.gamma_ = pandas.DataFrame(columns=[f'{i}'for i in range(K)])
 
     def gamma(self, m, k):
-        n_Am_k = to_cat(user.loc[:,[f'q_{i}' for i in range(k)]]) # select binary question answered matrix and make binary tensor from user table
+        n_Am_k = to_cat(user.loc[:,[f'q_{i}' for i in range(k)]]) # select question answered matrix and make categorical tensor from user table
         n_am_k_inv = 1- n_Am_k
 
         tn_k = np.tile(user.loc[:,"t_model"],k)
@@ -232,17 +232,21 @@ class E():
         term2 = np.multiply(n_am_k_inv, tn_k_inv)
 
         factor1 = np.add(term1,term2) # n x m x k
-        factor1 / self.cm * (1 / self.K)
+        (factor1 / self.cm * (1 / self.K))
+
+        denom = sum(np.prod((factor1 / self.cm * (1 / self.K)), axis=0).__array__(), axis=1) # vector of k?
+
+        num =
 
 
-        num = np.prod([(user.loc[n, "t_model"] if k == question[n][m] else (1 - user.loc[n, "t_model"])) / self.cm * (1 / self.K) * user.loc[n, "t_given"]
-                       for n in user.loc[:, user.q_answered == m]])
-        denom = sum([
-                    np.prod([
-                            (user.loc[n, "t_model"] if l == question[n][m] else (1 - user.loc[n, "t_model"])) / self.cm * (1 / self.cm)
-                              for n in user.loc[user.q_answered == m]
-                    ]
-                    ) for l in self.L])
+        # num = np.prod([(user.loc[n, "t_model"] if k == question[n][m] else (1 - user.loc[n, "t_model"])) / self.cm * (1 / self.K) * user.loc[n, "t_given"]
+        #                for n in user.loc[:, user.q_answered == m]])
+        # denom = sum([
+        #             np.prod([
+        #                     (user.loc[n, "t_model"] if l == question[n][m] else (1 - user.loc[n, "t_model"])) / self.cm * (1 / self.cm)
+        #                       for n in user.loc[user.q_answered == m]
+        #             ]
+        #             ) for l in self.L])
         return num/denom
 
     # def Q(self):
