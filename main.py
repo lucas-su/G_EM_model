@@ -103,8 +103,23 @@ import random
 import pandas
 
 
+def to_cat(y, num_classes=None, dtype=float):
+    y = np.array(y, dtype='int')
+    input_shape = y.shape
+    if input_shape and input_shape[-1] == 1 and len(input_shape) > 1:
+        input_shape = tuple(input_shape[:-1])
+    y = y.ravel()
+    if not num_classes:
+        num_classes = np.max(y) + 1
+    n = y.shape[0]
+    categorical = np.zeros((n, num_classes), dtype=dtype)
+    categorical[np.arange(n), y] = 1
+    output_shape = input_shape + (num_classes,)
+    categorical = np.reshape(categorical, output_shape)
+    return categorical
+
 def pickUniform(valueList):
-    i = r.randint(0, len(valueList))
+    i = np.random.randint(0, len(valueList))
     return valueList[i]
 
 
@@ -201,18 +216,32 @@ class E():
     def __init__(self, K):
         self.N = np.arange(0,10) # annotators
         self.M = np.arange(0,10) # questions
-        self.L = np.arange(0,5) # given label per question
+        self.L = np.arange(0,K) # given label per question
         self.K = K
         self.cm = K-1 # -1 because there's one good answer and the rest is wrong
         self.gamma_ = pandas.DataFrame(columns=[f'{i}'for i in range(K)])
 
     def gamma(self, m, k):
-        # n_Am = user.loc[:,[f'q_{i}' for i in range(k)]] # select binary question answered matrix from user table
+        n_Am_k = to_cat(user.loc[:,[f'q_{i}' for i in range(k)]]) # select binary question answered matrix and make binary tensor from user table
+        n_am_k_inv = 1- n_Am_k
 
-        num = np.prod([(user.loc[n, "t_given"] if k == question[n][m] else (1 - user.loc[n, "t_given"])) / self.cm * (1 / self.K) * user.loc[n, "t_given"]
+        tn_k = np.tile(user.loc[:,"t_model"],k)
+        tn_k_inv = (1-tn_k)/self.cm
+
+        term1 = np.multiply(n_Am_k, tn_k)
+        term2 = np.multiply(n_am_k_inv, tn_k_inv)
+
+        factor1 = np.add(term1,term2) # n x m x k
+        factor1 / self.cm * (1 / self.K)
+
+
+        num = np.prod([(user.loc[n, "t_model"] if k == question[n][m] else (1 - user.loc[n, "t_model"])) / self.cm * (1 / self.K) * user.loc[n, "t_given"]
                        for n in user.loc[:, user.q_answered == m]])
-        denom = sum([np.prod([(user.loc[n, "t_given"] if l == question[n][m] else (1 - user.loc[n, "t_given"])) / self.cm * (1 / self.cm)
-                              for n in user.loc[user.q_answered == m]]
+        denom = sum([
+                    np.prod([
+                            (user.loc[n, "t_model"] if l == question[n][m] else (1 - user.loc[n, "t_model"])) / self.cm * (1 / self.cm)
+                              for n in user.loc[user.q_answered == m]
+                    ]
                     ) for l in self.L])
         return num/denom
 
@@ -228,7 +257,7 @@ class E():
 
     def step(self):
         for m in self.L:
-            for k in self.K:
+            for k in range(self.K):
                 self.gamma_[m,k] = self.gamma(m, k)
 
 class M():
@@ -257,7 +286,7 @@ if __name__ == "__main__":
              "T_given": random.choices(x,k=nAnnot),
              "T_model": np.zeros(nAnnot)}
 
-    for q in range(nQuestions): # keep track of which annotator did which question by a boolean matrix, can take up a lot of mem for large n_questions
+    for q in range(nQuestions): # keep track of labels in broad format
         udata[f"q_{q}"] = np.zeros(nAnnot)
 
     user = pandas.DataFrame(data=udata)
